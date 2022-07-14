@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Nethereum.Web3;
-using Nethereum.Signer; 
-using Nethereum.Web3.Accounts; 
-using Nethereum.Util; 
-using Nethereum.Hex.HexConvertors.Extensions; 
-using Nethereum.RPC.Eth.DTOs; 
+using Nethereum.Signer;
+using Nethereum.Web3.Accounts;
+using Nethereum.Util;
+using Nethereum.Hex.HexConvertors.Extensions;
+using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Hex.HexTypes;
 using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Contracts.CQS;
@@ -21,76 +21,79 @@ namespace NethereumSample
     class Program
     {
 
-	[Function("balanceOf", "uint256")]
-	public class BalanceOfFunction : FunctionMessage
-	{
-		[Parameter("address", "_owner", 1)]
-		public string Owner { get; set; }
-	}
+        //  ABI for add Bills function
+        [Function("addbills")]
+        public class AddBillsFunction : FunctionMessage
+        {
+            [Parameter("address[]", "_userAddress", 1)]
+            public string[] Users { get; set; }
 
-    	[Function("transfer", "bool")]
-	public class TransferFunction : FunctionMessage
-	{
-		[Parameter("address", "_to", 1)]
-		public string To { get; set; }
+            [Parameter("uint256[]", "_bills", 2)]
+            public BigInteger[] Bill { get; set; }
+        }
 
-		[Parameter("uint256", "_value", 2)]
-		public BigInteger TokenAmount { get; set; }
-	}
+
+        //  ABI for add payments function
+        [Function("addpayments")]
+        public class AddPaymentsFunction : FunctionMessage
+        {
+            [Parameter("address[]", "_userAddress", 1)]
+            public string[] Users { get; set; }
+
+            [Parameter("uint256[]", "_payments", 2)]
+            public BigInteger[] Payment { get; set; }
+        }
+
 
         static void Main(string[] args)
         {
-            GetAccountBalance().Wait();
+            SubmitData().Wait();
             Console.ReadLine();
         }
 
-        static async Task GetAccountBalance()
+        static async Task SubmitData()
         {
-        var privateKey = "32f1385ea2afdc0243b0e57aee55c455e06a581158b72809e34a0e95262e5684";
-		var chainId = 6796; //Nethereum test chain, chainId
-		var account = new Account(privateKey, chainId);
-		Console.WriteLine("Our account: " + account.Address);
+            var privateKey = "32f1385ea2afdc0243b0e57aee55c455e06a581158b72809e34a0e95262e5684";
+            var chainId = 6796;
+            var account = new Account(privateKey, chainId);
+            Console.WriteLine("Our account: " + account.Address);
 
-		//Now let's create an instance of Web3 using our account pointing to our nethereum testchain
-		var web3 = new Web3(account, "https://data-seed1.gdccoin.io");
-		web3.TransactionManager.UseLegacyAsDefault = true; //Using legacy option instead of 1559
-	
-		// *** INTERACTING WITH THE CONTRACT
+            var web3 = new Web3(account, "https://data-seed1.gdccoin.io");
+            web3.TransactionManager.UseLegacyAsDefault = true;
 
-		// To retrieve the balance, we will create a QueryHandler and finally using our contract address 
-		// and message retrieve the balance amount.
+            // Voltreum Core Contract
+            var contractAddress = "0x5F8d48a8d4BEEd838a3fD9c3D5aC204b9E572E11";
 
-		var balanceOfFunctionMessage = new BalanceOfFunction()
-		{
-			Owner = account.Address,
-		};
-		var contractAddress = "0x1FaBA667615fdbb5e9C0b37b977285152Efc451b";
+            // Bills Generated for consumers
+            string[] consumersAddress = { "0xf922e3223567AeB66e6986cb09068B1B879B6ccc", "0xf922e3223567AeB66e6986cb09068B1B879B6ccc" };
+            BigInteger[] consumer_amounts = { 1000, 1000 };    // use uint
 
-		var balanceHandler = web3.Eth.GetContractQueryHandler<BalanceOfFunction>();
+            // Data Generated for Producers
+            string[] producersAddress = { "0xf922e3223567AeB66e6986cb09068B1B879B6ccc", "0xf922e3223567AeB66e6986cb09068B1B879B6ccc" };
+            BigInteger[] producers_amounts = { 1000, 1000 };    // use uint
 
-		var balance = await balanceHandler.QueryAsync<BigInteger>(contractAddress, balanceOfFunctionMessage);
+            var transferHandler = web3.Eth.GetContractTransactionHandler<AddBillsFunction>();
+            var transferHandler2 = web3.Eth.GetContractTransactionHandler<AddPaymentsFunction>();
 
-		Console.WriteLine("Balance of deployment owner address: " + balance);	
+            var billsTransfer = new AddBillsFunction()
+            {
+                Users = consumersAddress,
+                Bill = consumer_amounts
+            };
 
+            var paymentTransfer = new AddPaymentsFunction()
+            {
+                Users = producersAddress,
+                Payment = producers_amounts
+            };
 
+            var transactionTransferReceipt =
+            await transferHandler.SendRequestAndWaitForReceiptAsync(contractAddress, billsTransfer);
+            Console.WriteLine("Transaction hash transfer is: " + transactionTransferReceipt.TransactionHash);
 
-       	var receiverAddress = "0xf922e3223567AeB66e6986cb09068B1B879B6ccc";
-		var transferHandler = web3.Eth.GetContractTransactionHandler<TransferFunction>();
-
-		var transfer = new TransferFunction()
-		{
-			To = receiverAddress,
-			TokenAmount = 100
-		};
-
-		var transactionTransferReceipt =
-			await transferHandler.SendRequestAndWaitForReceiptAsync(contractAddress, transfer);
-		Console.WriteLine("Transaction hash transfer is: " + transactionTransferReceipt.TransactionHash);
-
-		balance = await balanceHandler.QueryAsync<BigInteger>(contractAddress, balanceOfFunctionMessage);
-
-		Console.WriteLine("Balance of deployment owner address after transfer: " + balance);
-
+            var transactionTransferReceipt2 =
+            await transferHandler2.SendRequestAndWaitForReceiptAsync(contractAddress, paymentTransfer);
+            Console.WriteLine("Transaction hash transfer is: " + transactionTransferReceipt2.TransactionHash);
 
         }
 
